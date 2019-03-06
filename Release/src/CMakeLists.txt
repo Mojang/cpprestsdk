@@ -76,7 +76,7 @@ if(CPPREST_EXCLUDE_COMPRESSION)
   target_compile_definitions(cpprest PRIVATE -DCPPREST_EXCLUDE_COMPRESSION=1)
 else()
   cpprest_find_zlib()
-  target_link_libraries(cpprest PRIVATE cpprestsdk_zlib_internal)
+  #target_link_libraries(cpprest PRIVATE cpprestsdk_zlib_internal)
 endif()
 
 # PPLX component
