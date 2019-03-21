@@ -442,5 +442,4 @@ bool verify_X509_cert_chain(const std::vector<std::string>& certChain, const std
 }
 }
 }
-
 #endif

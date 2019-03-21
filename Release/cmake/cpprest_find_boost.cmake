@@ -3,6 +3,9 @@ function(cpprest_find_boost)
     return()
   endif()
 
+  # Stop the BOOST_ROOT environment variable from influencing the find_package result
+  set(ENV{BOOST_ROOT} "")
+
   if(IOS)
     if (EXISTS "${PROJECT_SOURCE_DIR}/../Build_iOS/boost")
       set(IOS_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../Build_iOS")
