@@ -15,14 +15,10 @@
 
 #if !defined(CPPREST_EXCLUDE_WEBSOCKETS)
 
-#include "cpprest/details/x509_cert_utilities.h"
+#include "../../http/common/x509_cert_utilities.h"
 #include "pplx/threadpool.h"
 
 #include "ws_client_impl.h"
-
-// These must be undef'ed before including websocketpp because it is not Windows.h safe.
-#undef min
-#undef max
 
 // Force websocketpp to use C++ std::error_code instead of Boost.
 #define _WEBSOCKETPP_CPP11_SYSTEM_ERROR_
@@ -126,7 +122,7 @@ public:
     wspp_callback_client(websocket_client_config config) :
         websocket_client_callback_impl(std::move(config)),
         m_state(CREATED)
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
+#ifdef CPPREST_PLATFORM_ASIO_CERT_VERIFICATION_AVAILABLE
         , m_openssl_failed(false)
 #endif
     {}
@@ -134,22 +130,23 @@ public:
     ~wspp_callback_client() CPPREST_NOEXCEPT
     {
         _ASSERTE(m_state < DESTROYED);
-        std::unique_lock<std::mutex> lock(m_wspp_client_lock);
+        State localState;
+        {
+            std::lock_guard<std::mutex> lock(m_wspp_client_lock);
+            localState = m_state;
+        }   // Unlock the mutex so connect/close can use it.
 
         // Now, what states could we be in?
-        switch (m_state) {
+        switch (localState) {
         case DESTROYED:
             // This should be impossible
             std::abort();
         case CREATED:
-            lock.unlock();
             break;
         case CLOSED:
         case CONNECTING:
         case CONNECTED:
         case CLOSING:
-            // Unlock the mutex so connect/close can use it.
-            lock.unlock();
             try
             {
                 // This will do nothing in the already-connected case
@@ -191,16 +188,16 @@ public:
                     sslContext->set_verify_mode(boost::asio::ssl::context::verify_none);
                 }
 
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
+#ifdef CPPREST_PLATFORM_ASIO_CERT_VERIFICATION_AVAILABLE
                 m_openssl_failed = false;
 #endif
                 sslContext->set_verify_callback([this](bool preverified, boost::asio::ssl::verify_context &verifyCtx)
                 {
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
-                    // On OS X, iOS, and Android, OpenSSL doesn't have access to where the OS
-                    // stores keychains. If OpenSSL fails we will doing verification at the
-                    // end using the whole certificate chain so wait until the 'leaf' cert.
-                    // For now return true so OpenSSL continues down the certificate chain.
+#ifdef CPPREST_PLATFORM_ASIO_CERT_VERIFICATION_AVAILABLE
+                    // Attempt to use platform certificate validation when it is available:
+                    // If OpenSSL fails we will doing verification at the end using the whole certificate chain,
+                    // so wait until the 'leaf' cert. For now return true so OpenSSL continues down the certificate
+                    // chain.
                     if(!preverified)
                     {
                         m_openssl_failed = true;
@@ -338,7 +335,7 @@ public:
         // Add any request headers specified by the user.
         for (const auto & header : headers)
         {
-            if (!utility::details::str_icmp(header.first, g_subProtocolHeader))
+            if (!utility::details::str_iequal(header.first, g_subProtocolHeader))
             {
                 con->append_header(utility::conversions::to_utf8string(header.first), utility::conversions::to_utf8string(header.second));
             }
@@ -781,7 +778,7 @@ private:
     // Used to track if any of the OpenSSL server certificate verifications
     // failed. This can safely be tracked at the client level since connections
     // only happen once for each client.
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
+#ifdef CPPREST_PLATFORM_ASIO_CERT_VERIFICATION_AVAILABLE
     bool m_openssl_failed;
 #endif
 
@@ -806,4 +803,3 @@ websocket_callback_client::websocket_callback_client(websocket_client_config con
 }}}
 
 #endif
-
